@@ -10,13 +10,13 @@ pipeline {
         //git branch: 'main', url: 'https://github.com/user/repo.git'
       }
     }
-    stage('Build and Test') {
-      steps {
+   stage('Build and Test') {
+    steps {
         sh 'ls -ltr'
-        // build the project and create a JAR file
+        sh 'mvn -version'
         sh 'cd spring-boot-app && mvn clean package'
-      }
     }
+}
   stage('SonarQube Analysis') {
       steps {
         script {
