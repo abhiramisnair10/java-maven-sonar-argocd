@@ -3,6 +3,13 @@ pipeline {
     tools {
         maven 'maven'
     }
+
+environment {
+        DOCKER_IMAGE = "abhiramisnair10/spring-boot-app"
+        GIT_REPO_NAME = "java-maven-sonar-argocd"
+        GIT_USER_NAME = "abhiramisnair10"
+    }
+
   stages {
     stage('Checkout') {
       steps {
@@ -64,7 +71,7 @@ pipeline {
   }
 
   post {
-    always {
+    always {  
       cleanWs()
     }
   }
