@@ -1,4 +1,5 @@
 pipeline {
+
     agent {
         docker {
             image 'jibin321/maven-docker-agent:v2'
@@ -11,12 +12,13 @@ pipeline {
         stage('Checkout') {
             steps {
                 sh 'echo passed'
+                sh 'pwd'
+                sh 'ls -ltr'
             }
         }
 
         stage('Build and Test') {
             steps {
-                sh 'ls -ltr'
                 sh 'cd spring-boot-app && mvn clean package'
             }
         }
@@ -43,7 +45,12 @@ pipeline {
 
             steps {
                 script {
-                    sh 'docker build -t ${DOCKER_IMAGE} spring-boot-app'
+
+                    sh '''
+                        docker build \
+                        -t ${DOCKER_IMAGE} \
+                        spring-boot-app
+                    '''
 
                     def dockerImage = docker.image("${DOCKER_IMAGE}")
 
@@ -52,43 +59,59 @@ pipeline {
                         'docker-cred'
                     ) {
                         dockerImage.push()
-                        dockerImage.push("latest")
+                        dockerImage.push('latest')
                     }
                 }
             }
         }
 
         stage('Update Deployment File') {
+
             environment {
                 GIT_REPO_NAME = "java-maven-sonar-argocd"
                 GIT_USER_NAME = "abhiramisnair10"
             }
 
             steps {
+
+                /*
+                 * IMPORTANT:
+                 * 'github' is a Secret Text credential,
+                 * so use string(), NOT usernamePassword().
+                 */
+
                 withCredentials([
-                    usernamePassword(
+                    string(
                         credentialsId: 'github',
-                        usernameVariable: 'GITHUB_USERNAME',
-                        passwordVariable: 'GITHUB_TOKEN'
+                        variable: 'GITHUB_TOKEN'
                     )
                 ]) {
+
                     sh '''
-                        rm -rf repo-temp
+                        set -e
 
-                        git clone https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git repo-temp
+                        echo "Updating Kubernetes deployment..."
 
-                        cd repo-temp
-
+                        # Configure Git
                         git config user.email "abhiramisnair2020@gmail.com"
                         git config user.name "${GIT_USER_NAME}"
 
-                        sed -i "s|image: .*|image: abhiramisnair10/ultimate-cicd:${BUILD_NUMBER}|g" spring-boot-app-manifests/deployment.yml
+                        # Update Docker image
+                        sed -i "s|image: .*|image: abhiramisnair10/ultimate-cicd:${BUILD_NUMBER}|g" \
+                        spring-boot-app-manifests/deployment.yml
 
+                        # Show changed file
+                        echo "Updated deployment file:"
+                        cat spring-boot-app-manifests/deployment.yml
+
+                        # Commit changes
                         git add spring-boot-app-manifests/deployment.yml
 
-                        git commit -m "Update application image tag to ${BUILD_NUMBER} [skip ci]" || echo "No changes to commit"
+                        git commit -m "Update Docker image tag to ${BUILD_NUMBER} [skip ci]" \
+                        || echo "No changes to commit"
 
-                        git push origin main
+                        # Push changes to GitHub
+                        git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:main
                     '''
                 }
             }
